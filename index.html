@@ -10,10 +10,7 @@
 <meta property="og:type" content="website">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ctext y='52' x='6' font-size='56'%3E%24%3C/text%3E%3C/svg%3E">
 <style>
-  :root{
-    --bg:#0b1220;--card:#0f172a;--txt:#e5e7eb;--muted:#9ca3af;
-    --ok:#22c55e;--warn:#f59e0b;--err:#ef4444;--stroke:#1f2937;--field:#0b1220;
-  }
+  :root{--bg:#0b1220;--card:#0f172a;--txt:#e5e7eb;--muted:#9ca3af;--ok:#22c55e;--warn:#f59e0b;--err:#ef4444;--stroke:#1f2937;--field:#0b1220}
   *{box-sizing:border-box}
   body{margin:0;background:var(--bg);color:var(--txt);font:16px/1.5 system-ui,Segoe UI,Roboto,Arial}
   .wrap{max-width:1024px;margin:28px auto;padding:0 16px}
@@ -24,10 +21,7 @@
   @media(min-width:720px){.row{grid-template-columns:1fr 1fr}}
   label{display:flex;align-items:center;gap:6px;margin:10px 0 6px;color:var(--muted)}
   .hint{font-size:12px;color:var(--muted)}
-  input,select,button{
-    width:100%;padding:12px 12px;border-radius:12px;border:1px solid var(--stroke);
-    background:var(--field);color:var(--txt);outline:none
-  }
+  input,select,button{width:100%;padding:12px;border-radius:12px;border:1px solid var(--stroke);background:var(--field);color:var(--txt);outline:none}
   input:focus,select:focus{border-color:#334155;box-shadow:0 0 0 3px rgba(51,65,85,.35)}
   button{cursor:pointer}
   .btn{background:#1f2937;border-color:#334155}
@@ -53,7 +47,7 @@
     <div style="display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap">
       <div>
         <h1>Calculadora de Quitação / Antecipação</h1>
-        <p class="lead">Simule sua economia e compare <b>reduzir prazo</b> vs <b>reduzir parcela</b> lado a lado (Price). Em SAC, veja a linha antes/depois.</p>
+        <p class="lead">Compare <b>reduzir prazo</b> vs <b>reduzir parcela</b> (Price). Em SAC, veja linhas antes/depois.</p>
       </div>
       <span class="inline-help">Dica: parcelas iguais → <b>Price</b>. Parcelas caem → <b>SAC</b>.</span>
     </div>
@@ -132,10 +126,10 @@
       </div>
     </fieldset>
 
-    <!-- RESULTADOS -->
+    <!-- RESULTADO RESUMO -->
     <div id="out" class="result" style="display:none"></div>
 
-    <!-- BLOCO COMPARATIVO LADO A LADO (somente Price + ultimas) -->
+    <!-- COMPARAÇÃO LADO A LADO (só aparece após Calcular) -->
     <div id="compare" class="side" style="display:none">
       <div class="panel" id="panelPrazo">
         <h3>💡 Reduzir prazo</h3>
@@ -151,12 +145,12 @@
 
     <!-- EXPLICATIVO -->
     <div class="box" id="expBox" style="display:block; margin-top:12px">
-      <p><b>Reduzir prazo:</b> você paga algumas parcelas agora e <b>corta meses do final</b>. O valor da parcela mensal fica igual, termina antes — economiza os juros desses meses finais.</p>
-      <p><b>Reduzir parcela (Price):</b> você paga algumas parcelas agora e mantém o mesmo prazo. O sistema recalcula uma <b>parcela menor</b> para os meses restantes.</p>
+      <p><b>Reduzir prazo:</b> você paga algumas parcelas agora e <b>corta meses do final</b>. O valor da parcela mensal fica igual; termina antes — economiza os juros dos meses finais.</p>
+      <p><b>Reduzir parcela (Price):</b> você paga agora e mantém o mesmo prazo. O sistema recalcula uma <b>parcela menor</b> para os meses restantes.</p>
       <p>Em <b>SAC</b>, normalmente a antecipação reduz o prazo.</p>
     </div>
 
-    <!-- GRÁFICO GERAL (usado em outros modos) -->
+    <!-- GRÁFICO GERAL (outros modos) -->
     <canvas id="chart" aria-label="Gráfico geral"></canvas>
 
     <div class="foot">
@@ -174,8 +168,8 @@
   const fmtBRL = (v) => v.toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
   const fmtPct  = (v) => (v*100).toLocaleString('pt-BR',{maximumFractionDigits:3}) + '%';
 
-  const anualParaMes = a => Math.pow(1+a,1/12)-1;         // a em fração
-  const pvPrice = (A,i,N) => A*(1 - Math.pow(1+i,-N))/i;  // presente de anuidade
+  const anualParaMes = a => Math.pow(1+a,1/12)-1;
+  const pvPrice = (A,i,N) => A*(1 - Math.pow(1+i,-N))/i;
   const pagamentoPrice = (PV,i,N) => PV * i / (1 - Math.pow(1+i,-N));
 
   // máscaras leves
@@ -194,18 +188,21 @@
     });
   });
 
-  // Toggles
+  // Opções avançadas (começa oculto)
   document.getElementById('advToggle').onclick = () => {
     const box = document.getElementById('advBox');
     const opened = box.style.display === 'block';
     box.style.display = opened ? 'none' : 'block';
     document.getElementById('advToggle').textContent = opened ? 'Mostrar opções' : 'Ocultar opções';
   };
+
+  // Quando troca para "últimas", só mostra o campo K. Os painéis de comparação ficam escondidos até calcular.
   document.getElementById('modo').onchange = () => {
     const modo = document.getElementById('modo').value;
     document.getElementById('kBox').style.display = (modo==='ultimas') ? 'block' : 'none';
-    // esconder painel comparativo quando sair do modo ultimas
-    document.getElementById('compare').style.display = (modo==='ultimas') ? 'grid' : 'none';
+    document.getElementById('compare').style.display = 'none';
+    clearCanvas('chart'); clearCanvas('chartPrazo'); clearCanvas('chartParcela');
+    document.getElementById('out').style.display = 'none';
   };
 
   // ===== Cálculos =====
@@ -215,7 +212,7 @@
       if(!(i>0)) return {erro:"Para <b>Price</b>, informe <b>Saldo</b> ou <b>Taxa</b>."};
       usadoPV = pvPrice(A,i,N);
     }
-    const economiaBruta = (A*N) - usadoPV; // juros evitados
+    const economiaBruta = (A*N) - usadoPV;
     return {economiaBruta, usadoPV, i};
   }
 
@@ -223,19 +220,16 @@
     if(!(i>0)) return {erro:"Para antecipar últimas parcelas (Price), informe a <b>Taxa</b> (ou CET)."};
     if(!(k>0) || k>N) return {erro:"Informe um número válido de parcelas a antecipar (até N)."};
 
-    // PV das últimas k parcelas
     let pvSum = 0;
-    for(let t=N-k+1; t<=N; t++){
-      pvSum += A/Math.pow(1+i,t);
-    }
+    for(let t=N-k+1; t<=N; t++) pvSum += A/Math.pow(1+i,t);
     const multa = (PV>0 && multaPct>0) ? PV*multaPct : 0;
 
-    // Cenário 1: REDUZIR PRAZO (parcela igual, meses caem)
+    // Reduzir prazo
     const econPrazoBruta = A*k - pvSum;
     const econPrazoLiq   = econPrazoBruta - multa;
     const Nnovo = N - k;
 
-    // Cenário 2: REDUZIR PARCELA (mesmo N, parcela menor)
+    // Reduzir parcela
     const PVtotal = pvPrice(A,i,N);
     const PVnovo  = PVtotal - pvSum;
     const Anew    = pagamentoPrice(PVnovo, i, N);
@@ -245,21 +239,8 @@
     const econParcLiq   = econParcBruta - multa;
 
     return {
-      prazo: {
-        pagarHoje: pvSum + multa,
-        economiaBruta: econPrazoBruta,
-        economiaLiquida: econPrazoLiq,
-        Nnovo,
-        multa
-      },
-      parcela: {
-        pagarHoje: pvSum + multa,
-        economiaBruta: econParcBruta,
-        economiaLiquida: econParcLiq,
-        Aantigo: A,
-        Anovo: Anew,
-        multa
-      }
+      prazo: { pagarHoje: pvSum + multa, economiaBruta: econPrazoBruta, economiaLiquida: econPrazoLiq, Nnovo, multa },
+      parcela: { pagarHoje: pvSum + multa, economiaBruta: econParcBruta, economiaLiquida: econParcLiq, Aantigo: A, Anovo: Anew, multa }
     };
   }
 
@@ -288,14 +269,7 @@
     const principalAgora = (PV/N) * k;
     const multa = (PV||0) * (multaPct||0);
     const econLiq = econBruta - multa;
-    return {
-      pagarHoje: principalAgora + multa,
-      economiaBruta: econBruta,
-      economiaLiquida: econLiq,
-      Nnovo: N-k,
-      multa,
-      i: taxa
-    };
+    return { pagarHoje: principalAgora + multa, economiaBruta: econBruta, economiaLiquida: econLiq, Nnovo: N-k, multa, i: taxa };
   }
 
   // ===== Handler principal =====
@@ -312,13 +286,13 @@
     const multaPct   = advMultaOn ? (brToNumber(document.getElementById('multa').value)/100 || 0) : 0;
 
     let i = NaN;
-    if(iMes>0) i = iMes;
-    else if(iAno>0) i = anualParaMes(iAno);
+    if(iMes>0) i = iMes; else if(iAno>0) i = anualParaMes(iAno);
 
     const out = document.getElementById('out');
     const compare = document.getElementById('compare');
     const outPrazo = document.getElementById('outPrazo');
     const outParcela = document.getElementById('outParcela');
+
     out.style.display = 'block';
     compare.style.display = 'none';
     clearCanvas('chart'); clearCanvas('chartPrazo'); clearCanvas('chartParcela');
@@ -346,7 +320,8 @@
           ${multa?`<div>Multa: <b>${fmtBRL(multa)}</b> <span class="pill">opção avançada</span></div>`:''}
           <div class="${cls}"><b>${lbl}</b> <b>${fmtBRL(econLiquida)}</b></div>
         `;
-        drawBarTotals('chart', A*N, 0); // barras totais (antes x depois)
+        // gráfico geral: barras totais
+        drawBarTotalsAsync('chart', A*N, 0);
         return;
       }
 
@@ -354,13 +329,12 @@
         const r = anteciparUltimasPrice_duplo(A,N,i,k,PV,multaPct);
         if(r.erro){ out.innerHTML = r.erro; return; }
 
-        // Bloco superior (resumo geral)
         out.innerHTML = `
           <div class="kv"><div><b>Antecipar últimas ${k} parcelas (Price)</b></div><span class="badge">Comparação lado a lado</span></div>
-          <div class="muted">Mostrando dois caminhos: <b>reduzir prazo</b> (meses caem) e <b>reduzir parcela</b> (parcela fica menor).</div>
+          <div class="muted">Vendo dois caminhos: <b>reduzir prazo</b> (meses caem) e <b>reduzir parcela</b> (parcela menor).</div>
         `;
 
-        // Painel A — Reduzir prazo (mostrar MESES)
+        // Painel A — Reduzir prazo (meses)
         const clsA = r.prazo.economiaLiquida < 0 ? 'err' : (r.prazo.multa ? 'warn' : 'ok');
         const lblA = r.prazo.economiaLiquida < 0 ? 'Diferença (pior que manter):' : 'Economia líquida:';
         outPrazo.innerHTML = `
@@ -370,9 +344,8 @@
           ${r.prazo.multa?`<div>Multa: <b>${fmtBRL(r.prazo.multa)}</b></div>`:''}
           <div class="${clsA}"><b>${lblA}</b> <b>${fmtBRL(r.prazo.economiaLiquida)}</b></div>
         `;
-        drawBarCustom('chartPrazo', N, r.prazo.Nnovo, 'Meses antes', 'Meses depois');
 
-        // Painel B — Reduzir parcela (mostrar PARCELA ANTES/DEPOIS)
+        // Painel B — Reduzir parcela (parcela antes/depois)
         const clsB = r.parcela.economiaLiquida < 0 ? 'err' : (r.parcela.multa ? 'warn' : 'ok');
         const lblB = r.parcela.economiaLiquida < 0 ? 'Diferença (pior que manter):' : 'Economia líquida:';
         outParcela.innerHTML = `
@@ -382,9 +355,13 @@
           ${r.parcela.multa?`<div>Multa: <b>${fmtBRL(r.parcela.multa)}</b></div>`:''}
           <div class="${clsB}"><b>${lblB}</b> <b>${fmtBRL(r.parcela.economiaLiquida)}</b></div>
         `;
-        drawBarCustom('chartParcela', r.parcela.Aantigo, r.parcela.Anovo, 'Parcela antes', 'Parcela depois');
 
+        // mostra os painéis só agora
         compare.style.display = 'grid';
+
+        // gráficos após layout (para garantir dimensões corretas)
+        drawBarCustomAsync('chartPrazo', N, r.prazo.Nnovo, 'Meses antes', 'Meses depois');
+        drawBarCustomAsync('chartParcela', r.parcela.Aantigo, r.parcela.Anovo, 'Parcela antes', 'Parcela depois');
         return;
       }
     }
@@ -406,7 +383,7 @@
           <div class="${cls}"><b>${lbl}</b> <b>${fmtBRL(econLiquida)}</b></div>
           <div class="muted">Saldo informado: ${fmtBRL(PV||0)} • Parcelas restantes: ${N}</div>
         `;
-        drawLine(seriesSAC(PV, r.i, N), []); // linha antes/depois
+        drawLineAsync(seriesSAC(PV, r.i, N), []);
         return;
       }
 
@@ -427,7 +404,7 @@
         const taxa = r.i;
         const antes = seriesSAC(PV, taxa, N);
         const depois = seriesSAC(PV - (PV/N)*k, taxa, N - k);
-        drawLine(antes,depois);
+        drawLineAsync(antes,depois);
         return;
       }
     }
@@ -435,136 +412,102 @@
     out.innerHTML = "Revise os dados.";
   };
 
-  // Série de pagamentos SAC (aproximação)
+  // Série SAC (aproximação)
   function seriesSAC(PV,i,N){
-    const arr=[];
-    let saldo=PV;
-    const amort = PV/N;
-    for(let t=1;t<=N;t++){
-      const juros = i>0 ? saldo*i : 0;
-      arr.push(amort + juros);
-      saldo -= amort;
-    }
+    const arr=[], amort = PV/N; let saldo=PV;
+    for(let t=1;t<=N;t++){ const juros = i>0 ? saldo*i : 0; arr.push(amort + juros); saldo -= amort; }
     return arr;
   }
 
-  // ===== Gráficos =====
+  // ===== Canvas utils =====
   function clearCanvas(id){
-    const c = document.getElementById(id);
-    if(!c) return;
+    const c = document.getElementById(id); if(!c) return;
     const ctx = c.getContext('2d');
-    const W = c.width = c.clientWidth * devicePixelRatio;
-    const H = c.height = c.clientHeight * devicePixelRatio;
+    const rect = c.getBoundingClientRect();
+    const W = c.width = Math.max(1, Math.floor(rect.width * devicePixelRatio));
+    const H = c.height = Math.max(1, Math.floor(rect.height * devicePixelRatio));
     ctx.clearRect(0,0,W,H);
   }
+  function withCtx(id){
+    const c = document.getElementById(id);
+    const ctx = c.getContext('2d');
+    const rect = c.getBoundingClientRect();
+    const W = c.width = Math.max(1, Math.floor(rect.width * devicePixelRatio));
+    const H = c.height = Math.max(1, Math.floor(rect.height * devicePixelRatio));
+    return {c, ctx, W, H};
+  }
 
-  // Barras simples (totais antes/depois) — usado no “quitar tudo” Price
+  // Barras totais (antes/depois)
+  function drawBarTotalsAsync(id, before, after){
+    requestAnimationFrame(()=>drawBarTotals(id,before,after));
+  }
   function drawBarTotals(id, before, after){
-    const c = document.getElementById(id);
-    const ctx = c.getContext('2d');
-    const W = c.width = c.clientWidth * devicePixelRatio;
-    const H = c.height = c.clientHeight * devicePixelRatio;
+    const {ctx,W,H} = withCtx(id);
+    const pad = 40*devicePixelRatio, maxV = Math.max(1,before,after);
     ctx.clearRect(0,0,W,H);
-    const pad = 40*devicePixelRatio;
-    const maxV = Math.max(1, before, after);
+    ctx.strokeStyle='#1f2937'; ctx.beginPath();
+    ctx.moveTo(pad,H-pad); ctx.lineTo(W-pad,H-pad);
+    ctx.moveTo(pad,pad);   ctx.lineTo(pad,H-pad); ctx.stroke();
 
-    // eixos
-    ctx.strokeStyle = '#1f2937';
-    ctx.beginPath();
-    ctx.moveTo(pad, H-pad); ctx.lineTo(W-pad, H-pad);
-    ctx.moveTo(pad, pad);   ctx.lineTo(pad, H-pad);
-    ctx.stroke();
+    const barW=(W-pad*2)/6, h1=(before/maxV)*(H-pad*2), h2=(after/maxV)*(H-pad*2);
+    const x1=pad+barW, x2=W/2+barW;
 
-    const barW = (W - pad*2) / 6;
-    const h1 = (before/maxV) * (H - pad*2);
-    const h2 = (after /maxV) * (H - pad*2);
-    const x1 = pad + barW;
-    const x2 = W/2 + barW;
+    ctx.fillStyle='#64748b'; ctx.fillRect(x1,(H-pad)-h1,barW,h1);
+    ctx.fillStyle= after<before ? '#16a34a' : (after>before ? '#ef4444' : '#94a3b8');
+    ctx.fillRect(x2,(H-pad)-h2,barW,h2);
 
-    // Antes
-    ctx.fillStyle = '#64748b';
-    ctx.fillRect(x1, (H-pad)-h1, barW, h1);
-    // Depois
-    ctx.fillStyle = after < before ? '#16a34a' : (after > before ? '#ef4444' : '#94a3b8');
-    ctx.fillRect(x2, (H-pad)-h2, barW, h2);
-
-    // rótulos
-    ctx.fillStyle = '#9ca3af'; ctx.font = (12*devicePixelRatio)+'px system-ui'; ctx.textAlign='center';
+    ctx.fillStyle='#9ca3af'; ctx.font=(12*devicePixelRatio)+'px system-ui'; ctx.textAlign='center';
     ctx.fillText('Antes', x1+barW/2, pad-8*devicePixelRatio);
-    ctx.fillText('Depois', x2+barW/2, pad-8*devicePixelRatio);
+    ctx.fillText('Depois',x2+barW/2, pad-8*devicePixelRatio);
   }
 
-  // Barras personalizadas (ex.: meses antes/depois OU parcela antes/depois)
-  function drawBarCustom(id, before, after, labelBefore, labelAfter){
-    const c = document.getElementById(id);
-    const ctx = c.getContext('2d');
-    const W = c.width = c.clientWidth * devicePixelRatio;
-    const H = c.height = c.clientHeight * devicePixelRatio;
+  // Barras customizadas (meses / parcela)
+  function drawBarCustomAsync(id,before,after,l1,l2){ requestAnimationFrame(()=>drawBarCustom(id,before,after,l1,l2)); }
+  function drawBarCustom(id,before,after,l1,l2){
+    const {ctx,W,H} = withCtx(id);
+    const pad = 40*devicePixelRatio, maxV=Math.max(1,before,after);
     ctx.clearRect(0,0,W,H);
-    const pad = 40*devicePixelRatio;
-    const maxV = Math.max(1, before, after);
+    ctx.strokeStyle='#1f2937'; ctx.beginPath();
+    ctx.moveTo(pad,H-pad); ctx.lineTo(W-pad,H-pad);
+    ctx.moveTo(pad,pad);   ctx.lineTo(pad,H-pad); ctx.stroke();
 
-    // eixos
-    ctx.strokeStyle = '#1f2937';
-    ctx.beginPath();
-    ctx.moveTo(pad, H-pad); ctx.lineTo(W-pad, H-pad);
-    ctx.moveTo(pad, pad);   ctx.lineTo(pad, H-pad);
-    ctx.stroke();
+    const barW=(W-pad*2)/6, h1=(before/maxV)*(H-pad*2), h2=(after/maxV)*(H-pad*2);
+    const x1=pad+barW, x2=W/2+barW;
 
-    const barW = (W - pad*2) / 6;
-    const h1 = (before/maxV) * (H - pad*2);
-    const h2 = (after /maxV) * (H - pad*2);
-    const x1 = pad + barW;
-    const x2 = W/2 + barW;
+    ctx.fillStyle='#64748b'; ctx.fillRect(x1,(H-pad)-h1,barW,h1);
+    ctx.fillStyle= after<before ? '#16a34a' : (after>before ? '#ef4444' : '#94a3b8');
+    ctx.fillRect(x2,(H-pad)-h2,barW,h2);
 
-    // Antes
-    ctx.fillStyle = '#64748b';
-    ctx.fillRect(x1, (H-pad)-h1, barW, h1);
-    // Depois
-    ctx.fillStyle = after < before ? '#16a34a' : (after > before ? '#ef4444' : '#94a3b8');
-    ctx.fillRect(x2, (H-pad)-h2, barW, h2);
-
-    // rótulos
-    ctx.fillStyle = '#9ca3af'; ctx.font = (12*devicePixelRatio)+'px system-ui'; ctx.textAlign='center';
-    ctx.fillText(labelBefore, x1+barW/2, pad-8*devicePixelRatio);
-    ctx.fillText(labelAfter,  x2+barW/2, pad-8*devicePixelRatio);
+    ctx.fillStyle='#9ca3af'; ctx.font=(12*devicePixelRatio)+'px system-ui'; ctx.textAlign='center';
+    ctx.fillText(l1, x1+barW/2, pad-8*devicePixelRatio);
+    ctx.fillText(l2, x2+barW/2, pad-8*devicePixelRatio);
   }
 
   // Linhas (SAC)
+  function drawLineAsync(a,b){ requestAnimationFrame(()=>drawLine(a,b)); }
   function drawLine(antes, depois){
-    const c = document.getElementById('chart');
-    const ctx = c.getContext('2d');
-    const W = c.width = c.clientWidth * devicePixelRatio;
-    const H = c.height = c.clientHeight * devicePixelRatio;
-    ctx.clearRect(0,0,W,H);
+    const {ctx,W,H} = withCtx('chart');
     const pad = 40*devicePixelRatio;
-
-    const maxLen = Math.max(antes.length, depois.length, 1);
+    const maxLen=Math.max(antes.length,depois.length,1);
     const maxV = Math.max(1, Math.max(...antes,0), Math.max(...depois,0));
-    const step = (W - pad*2) / Math.max(1, (maxLen-1));
+    const step = (W - pad*2) / Math.max(1,(maxLen-1));
 
-    // eixos
-    ctx.strokeStyle = '#1f2937';
-    ctx.beginPath();
-    ctx.moveTo(pad, H-pad); ctx.lineTo(W-pad, H-pad);
-    ctx.moveTo(pad, pad);   ctx.lineTo(pad, H-pad);
-    ctx.stroke();
+    ctx.clearRect(0,0,W,H);
+    ctx.strokeStyle='#1f2937'; ctx.beginPath();
+    ctx.moveTo(pad,H-pad); ctx.lineTo(W-pad,H-pad);
+    ctx.moveTo(pad,pad);   ctx.lineTo(pad,H-pad); ctx.stroke();
 
-    // função de plot
-    function plot(arr, color){
+    function plot(arr,color){
       if(arr.length===0) return;
-      ctx.beginPath();
-      ctx.strokeStyle = color;
+      ctx.beginPath(); ctx.strokeStyle=color;
       for(let i=0;i<arr.length;i++){
-        const x = pad + i*step;
-        const y = (H-pad) - (arr[i]/maxV)*(H - pad*2);
+        const x=pad+i*step; const y=(H-pad)-(arr[i]/maxV)*(H-pad*2);
         if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
       }
       ctx.stroke();
     }
-
-    plot(antes,  '#94a3b8'); // antes
-    plot(depois, '#22c55e'); // depois
+    plot(antes,'#94a3b8'); // antes
+    plot(depois,'#22c55e'); // depois
   }
 </script>
 </body>
