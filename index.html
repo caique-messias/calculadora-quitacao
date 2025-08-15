@@ -39,7 +39,10 @@
   .foot{margin-top:18px;font-size:12px;color:var(--muted)}
   .badge{font-size:12px;padding:2px 8px;border-radius:999px;border:1px solid var(--stroke);color:var(--muted)}
   .pill{display:inline-block;padding:2px 8px;border-radius:999px;border:1px solid var(--stroke);font-size:12px}
-  canvas{width:100%;height:260px;background:#0b1220;border:1px solid var(--stroke);border-radius:12px;margin-top:12px}
+  .expander{margin-top:10px}
+  .expander button{width:100%}
+  .expander .box{display:none;margin-top:10px;border:1px solid var(--stroke);border-radius:12px;padding:12px;background:#0b1220}
+  canvas{width:100%;height:280px;background:#0b1220;border:1px solid var(--stroke);border-radius:12px;margin-top:12px}
 </style>
 </head>
 <body>
@@ -115,7 +118,7 @@
           <option value="prazo" selected>Reduzir prazo (diminuir N)</option>
           <option value="parcela">Reduzir valor da parcela (manter N)</option>
         </select>
-        <div class="hint">Reduzir parcela é suportado aqui para <b>Price</b>. Em SAC, usaremos “reduzir prazo”.</div>
+        <div class="hint">“Reduzir parcela” (manter N) é suportado aqui para <b>Price</b>. Em <b>SAC</b>, usaremos “reduzir prazo”.</div>
       </div>
     </fieldset>
 
@@ -124,7 +127,7 @@
       <div>
         <label>Opções avançadas</label>
         <button type="button" id="advToggle" class="btn">Mostrar opções</button>
-        <div id="advBox" style="display:none; margin-top:10px">
+        <div id="advBox" class="box">
           <label style="margin-top:0; display:flex; align-items:center; gap:8px;">
             <input type="checkbox" id="advMultaOn" />
             Considerar “taxa/multa de quitação”
@@ -139,6 +142,16 @@
     </fieldset>
 
     <div id="out" class="result" style="display:none"></div>
+
+    <!-- EXPLICATIVO (TOGGLE) -->
+    <div class="expander">
+      <button type="button" id="expToggle" class="btn">Entenda: reduzir prazo vs reduzir parcela</button>
+      <div id="expBox" class="box">
+        <p><b>Reduzir prazo:</b> você paga algumas parcelas agora e <b>corta meses do final</b>. O valor da parcela mensal <b>fica igual</b>, mas você termina antes — economiza os juros desses meses finais.</p>
+        <p><b>Reduzir parcela (Price):</b> você paga algumas parcelas agora e mantém o mesmo prazo. O sistema recalcula uma <b>parcela menor</b> para os meses restantes. O total futuro cai, mas menos do que em “reduzir prazo”.</p>
+        <p>Em <b>SAC</b>, os bancos normalmente aplicam a antecipação para <b>reduzir prazo</b>.</p>
+      </div>
+    </div>
 
     <!-- GRÁFICO -->
     <canvas id="chart" aria-label="Gráfico parcelas antes vs depois"></canvas>
@@ -178,20 +191,27 @@
     });
   });
 
-  // Mostrar / ocultar blocos
-  document.getElementById('advToggle').onclick = () => {
-    const box = document.getElementById('advBox');
-    const btn = document.getElementById('advToggle');
+  // Toggles
+  document.getElementById('advToggle').onclick = () => toggleBox('advBox','advToggle');
+  document.getElementById('expToggle').onclick = () => toggleBox('expBox','expToggle');
+
+  function toggleBox(boxId, btnId){
+    const box = document.getElementById(boxId);
+    const btn = document.getElementById(btnId);
     const opened = box.style.display === 'block';
     box.style.display = opened ? 'none' : 'block';
-    btn.textContent = opened ? 'Mostrar opções' : 'Ocultar opções';
-  };
+    btn.textContent = opened
+      ? (btnId==='advToggle'?'Mostrar opções':'Entenda: reduzir prazo vs reduzir parcela')
+      : (btnId==='advToggle'?'Ocultar opções':'Ocultar explicação');
+  }
+
   document.getElementById('modo').onchange = () => {
     const modo = document.getElementById('modo').value;
     document.getElementById('kBox').style.display = (modo==='ultimas') ? 'block' : 'none';
     document.getElementById('estrategiaBox').style.display = (modo==='ultimas') ? 'block' : 'none';
   };
 
+  // ===== Cálculos =====
   function economiaPriceTudo(A,N,PV,i){
     let usadoPV = PV;
     if(!(usadoPV>0)){
@@ -227,7 +247,6 @@
       };
     } else {
       // reduzir parcela mantendo N: novo PV' = PVtotal - pvSum
-      // PVtotal = pvPrice(A,i,N) (se PV informado, usamos ele para multa apenas; para recalcular A' usamos PV teórico)
       const PVtotal = pvPrice(A,i,N);
       const PVnovo  = PVtotal - pvSum;
       const Anew    = pagamentoPrice(PVnovo, i, N);
@@ -284,6 +303,7 @@
     };
   }
 
+  // ===== Handler principal =====
   document.getElementById('btn').onclick = () => {
     const tipo   = document.getElementById('tipo').value;
     const A      = brToNumber(document.getElementById('parcela').value);
@@ -302,19 +322,18 @@
     else if(iAno>0) i = anualParaMes(iAno);
 
     const out = document.getElementById('out');
-    const chart = document.getElementById('chart');
     out.style.display = 'block';
 
     // validações básicas
-    if(!(N>0)){ out.innerHTML = "<span class='err'>Informe <b>Parcelas restantes (N)</b>.</span>"; drawChart([],[]); return; }
-    if(tipo==='price' && !(A>0)){ out.innerHTML = "<span class='err'>Informe o <b>valor da parcela</b>.</span>"; drawChart([],[]); return; }
-    if(modo==='ultimas' && !(k>0)){ out.innerHTML = "<span class='err'>Informe <b>quantas parcelas</b> antecipar.</span>"; drawChart([],[]); return; }
+    if(!(N>0)){ out.innerHTML = "<span class='err'>Informe <b>Parcelas restantes (N)</b>.</span>"; drawBar([],[]); return; }
+    if(tipo==='price' && !(A>0)){ out.innerHTML = "<span class='err'>Informe o <b>valor da parcela</b>.</span>"; drawBar([],[]); return; }
+    if(modo==='ultimas' && !(k>0)){ out.innerHTML = "<span class='err'>Informe <b>quantas parcelas</b> antecipar.</span>"; drawBar([],[]); return; }
 
     // Cálculo principal
     if(tipo==='price'){
       if(modo==='tudo'){
         const r = economiaPriceTudo(A,N,PV,i);
-        if(r.erro){ out.innerHTML = r.erro; drawChart([],[]); return; }
+        if(r.erro){ out.innerHTML = r.erro; drawBar([],[]); return; }
         const multa = (r.usadoPV||0) * multaPct;
         const econLiquida = r.economiaBruta - multa;
         const cls = econLiquida < 0 ? 'err' : (multa ? 'warn' : 'ok');
@@ -330,14 +349,14 @@
           <div class="muted">Saldo considerado: ${fmtBRL(r.usadoPV||0)}</div>
         `;
 
-        // gráfico: antes N vezes A, depois 0 (quitado)
-        drawChart(Array(N).fill(A), []);
+        // gráfico colunas (total antes vs depois=0)
+        drawBar([A*N],[0]);
         return;
       }
 
       if(modo==='ultimas'){
         const r = anteciparUltimasPrice(A,N,i,k,estrategia,PV,multaPct);
-        if(r.erro){ out.innerHTML = r.erro; drawChart([],[]); return; }
+        if(r.erro){ out.innerHTML = r.erro; drawBar([],[]); return; }
         const cls = r.economiaLiquida < 0 ? 'err' : (r.multa ? 'warn' : 'ok');
         const lbl = r.economiaLiquida < 0 ? 'Diferença (pior que manter):' : 'Economia líquida:';
 
@@ -350,15 +369,10 @@
           <div class="muted">De ${N} → ${r.Nnovo} parcelas. ${estrategia==='parcela' ? `Parcela nova estimada: <b>${fmtBRL(r.Anovo)}</b> (antes: ${fmtBRL(r.Aantigo)})` : `Parcela permanece ${fmtBRL(r.Aantigo)}.`}</div>
         `;
 
-        // gráfico
-        const antes = Array(N).fill(A);
-        let depois;
-        if(estrategia==='prazo'){
-          depois = Array(N - k).fill(A);
-        } else {
-          depois = Array(N).fill(r.Anovo);
-        }
-        drawChart(antes,depois);
+        // gráfico colunas (Price = parcelas fixas): total antes vs total depois
+        const totalAntes = A*N;
+        const totalDepois = (estrategia==='prazo') ? A*(N-k) : (r.Anovo*N);
+        drawBar([totalAntes],[totalDepois]);
         return;
       }
     }
@@ -366,7 +380,7 @@
     if(tipo==='sac'){
       if(modo==='tudo'){
         const r = economiaSACTudo(A,N,PV,i);
-        if(r.erro){ out.innerHTML = r.erro; drawChart([],[]); return; }
+        if(r.erro){ out.innerHTML = r.erro; drawLine([],[]); return; }
         const multa = (PV||0) * multaPct;
         const econLiquida = r.economiaBruta - multa;
         const cls = econLiquida < 0 ? 'err' : (multa ? 'warn' : 'ok');
@@ -379,14 +393,14 @@
           <div class="${cls}"><b>${lbl}</b> <b>${fmtBRL(econLiquida)}</b></div>
           <div class="muted">Saldo informado: ${fmtBRL(PV||0)} • Parcelas restantes: ${N}</div>
         `;
-        // gráfico: antes escada decrescente; depois 0
-        drawChart(seriesSAC(PV, r.i, N), []);
+        // linhas: antes vs nenhum depois (quitado)
+        drawLine(seriesSAC(PV, r.i, N), []);
         return;
       }
 
       if(modo==='ultimas'){
         const r = anteciparUltimasSAC(A,N,PV,i,k,multaPct);
-        if(r.erro){ out.innerHTML = r.erro; drawChart([],[]); return; }
+        if(r.erro){ out.innerHTML = r.erro; drawLine([],[]); return; }
         const cls = r.economiaLiquida < 0 ? 'err' : (r.multa ? 'warn' : 'ok');
         const lbl = r.economiaLiquida < 0 ? 'Diferença (pior que manter):' : 'Economia líquida:';
 
@@ -399,20 +413,19 @@
           <div class="muted">De ${N} → ${r.Nnovo} parcelas. Em SAC mantemos o valor das primeiras e só reduzimos o prazo.</div>
         `;
 
-        // gráfico: antes escada decrescente; depois escada até N-k
         const taxa = r.i;
         const antes = seriesSAC(PV, taxa, N);
         const depois = seriesSAC(PV - (PV/N)*k, taxa, N - k);
-        drawChart(antes,depois);
+        drawLine(antes,depois);
         return;
       }
     }
 
     out.innerHTML = "Revise os dados.";
-    drawChart([],[]);
+    drawBar([],[]);
   };
 
-  // Série de pagamentos SAC (aproximação: amortização constante PV/N e juros sobre saldo)
+  // Série de pagamentos SAC (aproximação)
   function seriesSAC(PV,i,N){
     const arr=[];
     let saldo=PV;
@@ -425,25 +438,19 @@
     return arr;
   }
 
-  // ===== Gráfico (canvas 2 séries: antes x depois) =====
-  function drawChart(antes, depois){
+  // ===== GRÁFICOS =====
+  // Barras: duas colunas (Antes x Depois) — para Price
+  function drawBar(antesTotals, depoisTotals){
     const c = document.getElementById('chart');
     const ctx = c.getContext('2d');
     const W = c.width = c.clientWidth * devicePixelRatio;
     const H = c.height = c.clientHeight * devicePixelRatio;
     ctx.clearRect(0,0,W,H);
+    const pad = 40*devicePixelRatio;
 
-    // legenda
-    ctx.font = (12*devicePixelRatio)+'px system-ui';
-    ctx.fillStyle = '#9ca3af';
-    ctx.fillText('Antes', 12*devicePixelRatio, 20*devicePixelRatio);
-    ctx.fillText('Depois', 80*devicePixelRatio, 20*devicePixelRatio);
-
-    // cores (não fixamos cores exatas; o navegador escolherá tons padrão)
-    const pad = 32*devicePixelRatio;
-    const maxLen = Math.max(antes.length, depois.length, 1);
-    const barW = Math.max(2, (W - pad*2) / (maxLen*1.2));
-    const maxV = Math.max(1, Math.max(...antes,0, ...depois,0));
+    const before = antesTotals[0] || 0;
+    const after  = depoisTotals[0] || 0;
+    const maxV = Math.max(1, before, after);
 
     // eixos
     ctx.strokeStyle = '#1f2937';
@@ -454,22 +461,139 @@
     ctx.lineTo(pad, H-pad);
     ctx.stroke();
 
-    // desenhar barras
-    for(let i=0;i<maxLen;i++){
-      const x = pad + i*(barW*1.2);
-      const v1 = i<antes.length ? antes[i] : 0;
-      const v2 = i<depois.length ? depois[i] : 0;
-      const h1 = (v1/maxV)*(H - pad*2);
-      const h2 = (v2/maxV)*(H - pad*2);
+    // títulos
+    ctx.fillStyle = '#9ca3af';
+    ctx.font = (12*devicePixelRatio)+'px system-ui';
+    ctx.fillText('Antes (total a pagar)', pad, pad-8*devicePixelRatio);
+    ctx.fillText('Depois (total a pagar)', W/2, pad-8*devicePixelRatio);
 
-      // antes
-      ctx.fillStyle = '#64748b';
-      ctx.fillRect(x, (H-pad)-h1, barW, h1);
-      // depois (ao lado)
-      ctx.fillStyle = '#e5e7eb';
-      ctx.fillRect(x+barW*0.2, (H-pad)-h2, barW, h2);
+    // barras
+    const barW = (W - pad*2) / 6;
+    const h1 = (before/maxV) * (H - pad*2);
+    const h2 = (after /maxV) * (H - pad*2);
+
+    const x1 = pad + barW;
+    const x2 = W/2 + barW;
+
+    // Antes (cinza)
+    ctx.fillStyle = '#64748b';
+    ctx.fillRect(x1, (H-pad)-h1, barW, h1);
+
+    // Depois (verde se menor, vermelho se maior, cinza se igual)
+    ctx.fillStyle = after < before ? '#16a34a' : (after > before ? '#ef4444' : '#94a3b8');
+    ctx.fillRect(x2, (H-pad)-h2, barW, h2);
+
+    // valores
+    ctx.fillStyle = '#e5e7eb';
+    ctx.textAlign = 'center';
+    ctx.fillText(formatBRLShort(before), x1+barW/2, (H-pad)-h1 - 6*devicePixelRatio);
+    ctx.fillText(formatBRLShort(after),  x2+barW/2, (H-pad)-h2 - 6*devicePixelRatio);
+    ctx.textAlign = 'start';
+  }
+
+  // Linhas: séries mensais — para SAC
+  function drawLine(antes, depois){
+    const c = document.getElementById('chart');
+    const ctx = c.getContext('2d');
+    const W = c.width = c.clientWidth * devicePixelRatio;
+    const H = c.height = c.clientHeight * devicePixelRatio;
+    ctx.clearRect(0,0,W,H);
+    const pad = 40*devicePixelRatio;
+
+    const maxLen = Math.max(antes.length, depois.length, 1);
+    const maxV = Math.max(1, Math.max(...antes,0), Math.max(...depois,0));
+    const step = (W - pad*2) / Math.max(1, (maxLen-1));
+
+    // eixos
+    ctx.strokeStyle = '#1f2937';
+    ctx.beginPath();
+    ctx.moveTo(pad, H-pad);
+    ctx.lineTo(W-pad, H-pad);
+    ctx.moveTo(pad, pad);
+    ctx.lineTo(pad, H-pad);
+    ctx.stroke();
+
+    // legendas
+    ctx.fillStyle = '#9ca3af';
+    ctx.font = (12*devicePixelRatio)+'px system-ui';
+    ctx.fillText('Antes', pad, pad-8*devicePixelRatio);
+    ctx.fillText('Depois', pad+60*devicePixelRatio, pad-8*devicePixelRatio);
+
+    // função para desenhar linha
+    function plot(arr, color){
+      if(arr.length===0) return;
+      ctx.beginPath();
+      ctx.strokeStyle = color;
+      for(let i=0;i<arr.length;i++){
+        const x = pad + i*step;
+        const y = (H-pad) - (arr[i]/maxV)*(H - pad*2);
+        if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+      }
+      ctx.stroke();
+    }
+
+    plot(antes,  '#94a3b8'); // antes cinza-claro
+    plot(depois, '#22c55e'); // depois verde
+  }
+
+  function formatBRLShort(v){
+    // Formato curto para rótulo das barras
+    if(v>=1e6) return 'R$ '+(v/1e6).toFixed(2)+' mi';
+    if(v>=1e3) return 'R$ '+(v/1e3).toFixed(2)+' mil';
+    return 'R$ '+v.toFixed(2).replace('.',',');
+  }
+
+  // Série de pagamentos SAC (aproximação)
+  function seriesSAC(PV,i,N){
+    const arr=[];
+    let saldo=PV;
+    const amort = PV/N;
+    for(let t=1;t<=N;t++){
+      const juros = i>0 ? saldo*i : 0;
+      arr.push(amort + juros);
+      saldo -= amort;
+    }
+    return arr;
+  }
+
+  // ===== Botão Calcular (repintar gráfico correto) =====
+  function drawBarOrLineFor(tipo, modo, A, N, k, r, estrategia, PV, taxa){
+    if(tipo==='price'){
+      // barras: totais
+      if(modo==='tudo'){
+        drawBar([A*N],[0]);
+      } else {
+        const totalAntes = A*N;
+        const totalDepois = (estrategia==='prazo') ? A*(N-k) : (r.Anovo*N);
+        drawBar([totalAntes],[totalDepois]);
+      }
+    } else {
+      // linhas: séries
+      if(modo==='tudo'){
+        drawLine(seriesSAC(PV, taxa, N), []);
+      } else {
+        const antes = seriesSAC(PV, taxa, N);
+        const depois = seriesSAC(PV - (PV/N)*k, taxa, N - k);
+        drawLine(antes,depois);
+      }
     }
   }
+
+  // ===== Série SAC adicional (duplicada acima por segurança de ordem) =====
+  function seriesSAC(PV,i,N){
+    const arr=[];
+    let saldo=PV;
+    const amort = PV/N;
+    for(let t=1;t<=N;t++){
+      const juros = i>0 ? saldo*i : 0;
+      arr.push(amort + juros);
+      saldo -= amort;
+    }
+    return arr;
+  }
+
+  // Substituímos o draw final dentro dos cálculos por chamadas diretas às funções acima
+  // (as chamadas já estão no handler principal)
 </script>
 </body>
 </html>
