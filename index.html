@@ -6,7 +6,7 @@
 <title>Calculadora de Quitação de Parcelas (Price/SAC) — Economize Juros</title>
 <meta name="description" content="Descubra quanto de juros você economiza ao quitar/antecipar parcelas de financiamento. Suporta Price (parcelas iguais) e SAC (parcelas decrescentes).">
 <meta property="og:title" content="Calculadora de Quitação — Economize Juros">
-<meta property="og:description" content="Simule sua economia ao quitar tudo agora ou antecipar a última parcela.">
+<meta property="og:description" content="Simule sua economia ao quitar tudo agora ou antecipar últimas parcelas.">
 <meta property="og:type" content="website">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ctext y='52' x='6' font-size='56'%3E%24%3C/text%3E%3C/svg%3E">
 <style>
@@ -16,7 +16,7 @@
   }
   *{box-sizing:border-box}
   body{margin:0;background:var(--bg);color:var(--txt);font:16px/1.5 system-ui,Segoe UI,Roboto,Arial}
-  .wrap{max-width:920px;margin:28px auto;padding:0 16px}
+  .wrap{max-width:980px;margin:28px auto;padding:0 16px}
   .card{background:var(--card);border-radius:18px;padding:18px 16px;box-shadow:0 8px 30px rgba(0,0,0,.35)}
   h1{margin:0 0 8px;font-size:22px}
   p.lead{margin:0 0 6px;color:var(--muted)}
@@ -38,6 +38,8 @@
   .kv{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center}
   .foot{margin-top:18px;font-size:12px;color:var(--muted)}
   .badge{font-size:12px;padding:2px 8px;border-radius:999px;border:1px solid var(--stroke);color:var(--muted)}
+  .pill{display:inline-block;padding:2px 8px;border-radius:999px;border:1px solid var(--stroke);font-size:12px}
+  canvas{width:100%;height:260px;background:#0b1220;border:1px solid var(--stroke);border-radius:12px;margin-top:12px}
 </style>
 </head>
 <body>
@@ -46,7 +48,7 @@
     <div style="display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap">
       <div>
         <h1>Calculadora de Quitação / Antecipação</h1>
-        <p class="lead">Veja quanto de <b>juros</b> você economiza ao <b>quitar agora</b> ou antecipar a <b>última parcela</b>.</p>
+        <p class="lead">Veja quanto de <b>juros</b> você economiza ao <b>quitar agora</b> ou antecipar <b>várias parcelas finais</b>.</p>
       </div>
       <span class="inline-help">Dica: se as parcelas são iguais → <b>Price</b>. Se caem todo mês → <b>SAC</b>.</span>
     </div>
@@ -90,26 +92,56 @@
       </div>
     </fieldset>
 
+    <!-- ANTECIPAR VÁRIAS PARCELAS + ESTRATÉGIA -->
     <fieldset class="row">
-      <div>
-        <label for="multa">Multa de quitação % (opcional)</label>
-        <input id="multa" inputmode="decimal" placeholder="Ex.: 2" />
-        <div class="hint">Alguns contratos cobram até 2% sobre o saldo.</div>
-      </div>
       <div>
         <label for="modo">O que antecipar?</label>
         <select id="modo">
           <option value="tudo" selected>Quitar tudo agora</option>
-          <option value="ultima">Antecipar só a última parcela (Price)</option>
+          <option value="ultimas">Antecipar últimas parcelas</option>
         </select>
+      </div>
+      <div id="kBox" style="display:none">
+        <label for="k">Quantas parcelas finais antecipar?</label>
+        <input id="k" inputmode="numeric" placeholder="Ex.: 3" />
+        <div class="hint">Até o máximo de N.</div>
       </div>
     </fieldset>
 
-    <div style="margin-top:10px">
-      <button id="btn" class="btn">Calcular</button>
-    </div>
+    <fieldset class="row" id="estrategiaBox" style="display:none">
+      <div>
+        <label for="estrategia">Aplicar a antecipação para:</label>
+        <select id="estrategia">
+          <option value="prazo" selected>Reduzir prazo (diminuir N)</option>
+          <option value="parcela">Reduzir valor da parcela (manter N)</option>
+        </select>
+        <div class="hint">Reduzir parcela é suportado aqui para <b>Price</b>. Em SAC, usaremos “reduzir prazo”.</div>
+      </div>
+    </fieldset>
+
+    <!-- OPÇÕES AVANÇADAS -->
+    <fieldset class="row">
+      <div>
+        <label>Opções avançadas</label>
+        <button type="button" id="advToggle" class="btn">Mostrar opções</button>
+        <div id="advBox" style="display:none; margin-top:10px">
+          <label style="margin-top:0; display:flex; align-items:center; gap:8px;">
+            <input type="checkbox" id="advMultaOn" />
+            Considerar “taxa/multa de quitação”
+          </label>
+          <input id="multa" inputmode="decimal" placeholder="Ex.: 2 (em %)" />
+          <div class="hint">⚠️ Em contratos atuais é incomum haver multa relevante. Confirme no contrato.</div>
+        </div>
+      </div>
+      <div style="display:flex;align-items:flex-end">
+        <button id="btn" class="btn" style="width:100%">Calcular</button>
+      </div>
+    </fieldset>
 
     <div id="out" class="result" style="display:none"></div>
+
+    <!-- GRÁFICO -->
+    <canvas id="chart" aria-label="Gráfico parcelas antes vs depois"></canvas>
 
     <div class="foot">
       ⚠️ <b>Aviso:</b> Resultado educativo/estimado. Regras específicas do seu contrato podem alterar valores. Confirme com sua instituição antes de decidir.
@@ -118,7 +150,7 @@
 </div>
 
 <script>
-  // ===== Helpers de número/máscara =====
+  // ===== Helpers =====
   const brToNumber = (s) => {
     if(!s) return NaN;
     return Number(String(s).replace(/\./g,'').replace(',','.').replace(/[^\d.-]/g,''));
@@ -126,46 +158,96 @@
   const fmtBRL = (v) => v.toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
   const fmtPct  = (v) => (v*100).toLocaleString('pt-BR',{maximumFractionDigits:3}) + '%';
 
-  // máscara leve para R$ e %
-  const maskCurrency = (el)=> {
+  const anualParaMes = a => Math.pow(1+a,1/12)-1;         // a em fração
+  const pvPrice = (A,i,N) => A*(1 - Math.pow(1+i,-N))/i;  // presente de anuidade
+  const pagamentoPrice = (PV,i,N) => PV * i / (1 - Math.pow(1+i,-N));
+
+  // máscaras leves
+  ['parcela','saldo'].forEach(id=>{
+    const el=document.getElementById(id);
     el.addEventListener('blur', ()=> {
       const n = brToNumber(el.value);
       if(!isNaN(n) && el.value.trim()!=='') el.value = n.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
     });
-  };
-  const maskPercent = (el)=> {
+  });
+  ['taxaMes','cetAno','multa'].forEach(id=>{
+    const el=document.getElementById(id);
     el.addEventListener('blur', ()=> {
       const n = brToNumber(el.value);
       if(!isNaN(n) && el.value.trim()!=='') el.value = n.toLocaleString('pt-BR',{maximumFractionDigits:3});
     });
+  });
+
+  // Mostrar / ocultar blocos
+  document.getElementById('advToggle').onclick = () => {
+    const box = document.getElementById('advBox');
+    const btn = document.getElementById('advToggle');
+    const opened = box.style.display === 'block';
+    box.style.display = opened ? 'none' : 'block';
+    btn.textContent = opened ? 'Mostrar opções' : 'Ocultar opções';
+  };
+  document.getElementById('modo').onchange = () => {
+    const modo = document.getElementById('modo').value;
+    document.getElementById('kBox').style.display = (modo==='ultimas') ? 'block' : 'none';
+    document.getElementById('estrategiaBox').style.display = (modo==='ultimas') ? 'block' : 'none';
   };
 
-  ['parcela','saldo'].forEach(id=>maskCurrency(document.getElementById(id)));
-  ['taxaMes','cetAno','multa'].forEach(id=>maskPercent(document.getElementById(id)));
-
-  // ===== Math =====
-  const anualParaMes = a => Math.pow(1+a,1/12)-1;         // a em fração (ex.: 0.225)
-  const pvPrice = (A,i,N) => A*(1 - Math.pow(1+i,-N))/i;  // presente de anuidade
-
-  function economiaPrice(A,N,PV,i){
+  function economiaPriceTudo(A,N,PV,i){
     let usadoPV = PV;
     if(!(usadoPV>0)){
       if(!(i>0)) return {erro:"Para <b>Price</b>, informe <b>Saldo</b> ou <b>Taxa</b>."};
       usadoPV = pvPrice(A,i,N);
     }
-    const economiaBruta = (A*N) - usadoPV; // total futuro - PV
+    const economiaBruta = (A*N) - usadoPV; // juros evitados
     return {economiaBruta, usadoPV, i};
   }
 
-  function ultimaParcelaPrice(A,N,i){
-    if(!(i>0)) return {erro:"Para antecipar só a última parcela, informe a <b>Taxa</b> (ou CET)."};
-    const hoje = A/Math.pow(1+i,N);
-    return {desconto: A - hoje, pagarHoje: hoje};
+  function anteciparUltimasPrice(A,N,i,k,estrategia,PV, multaPct){
+    if(!(i>0)) return {erro:"Para antecipar últimas parcelas (Price), informe a <b>Taxa</b> (ou CET)."};
+    if(!(k>0) || k>N) return {erro:"Informe um número válido de parcelas a antecipar (até N)."};
+    // PV das últimas k parcelas: somatório A/(1+i)^t para t=N-k+1..N
+    let pvSum = 0;
+    for(let t=N-k+1; t<=N; t++){
+      pvSum += A/Math.pow(1+i,t);
+    }
+    let multa = 0;
+    if(PV>0 && multaPct>0){ multa = PV*multaPct; }
+
+    if(estrategia==='prazo'){
+      const econBruta = A*k - pvSum;           // economia de juros dessas k
+      const econLiq = econBruta - multa;
+      return {
+        tipo:'price-k-prazo',
+        pagarHoje: pvSum + multa,
+        economiaBruta: econBruta,
+        economiaLiquida: econLiq,
+        Nnovo: N-k,
+        Aantigo: A, Anovo: A,
+        multa
+      };
+    } else {
+      // reduzir parcela mantendo N: novo PV' = PVtotal - pvSum
+      // PVtotal = pvPrice(A,i,N) (se PV informado, usamos ele para multa apenas; para recalcular A' usamos PV teórico)
+      const PVtotal = pvPrice(A,i,N);
+      const PVnovo  = PVtotal - pvSum;
+      const Anew    = pagamentoPrice(PVnovo, i, N);
+      const totalAntes = A*N;
+      const totalDepois = pvSum + (Anew*N);
+      const econBruta = totalAntes - totalDepois;
+      const econLiq = econBruta - multa;
+      return {
+        tipo:'price-k-parcela',
+        pagarHoje: pvSum + multa,
+        economiaBruta: econBruta,
+        economiaLiquida: econLiq,
+        Nnovo: N,
+        Aantigo: A, Anovo: Anew,
+        multa
+      };
+    }
   }
 
-  // SAC: juros poupados ≈ i * PV * (N+1)/2
-  // Se i não informado, estimar por: parcelaAtual = PV/N + i*PV  ⇒ i ≈ parcela/PV - 1/N
-  function economiaSAC(parcela, N, PV, i){
+  function economiaSACTudo(parcela, N, PV, i){
     if(!(PV>0)) return {erro:"Para <b>SAC</b>, informe o <b>Saldo</b>."};
     let taxa = i;
     if(!(taxa>0)){
@@ -173,8 +255,33 @@
       taxa = (parcela/PV) - (1/N);
       if(!(taxa>0)) return {erro:"Dados insuficientes: revise parcela/saldo/N."};
     }
-    const economiaBruta = taxa * PV * (N+1) / 2;
+    const economiaBruta = taxa * PV * (N+1) / 2; // juros que seriam pagos
     return {economiaBruta, i:taxa};
+  }
+
+  function anteciparUltimasSAC(parcela,N,PV,i,k,multaPct){
+    if(!(PV>0)) return {erro:"Para <b>SAC</b>, informe o <b>Saldo</b>."};
+    let taxa = i;
+    if(!(taxa>0)){
+      if(!(parcela>0)) return {erro:"Para <b>SAC</b>, informe <b>Taxa</b> ou a <b>parcela atual</b>."};
+      taxa = (parcela/PV) - (1/N);
+      if(!(taxa>0)) return {erro:"Dados insuficientes: revise parcela/saldo/N."};
+    }
+    if(!(k>0) || k>N) return {erro:"Informe um número válido de parcelas a antecipar (até N)."};
+    // juros economizados nas k últimas de SAC ≈ i*PV * [k(k+1)/(2N)]
+    const econBruta = taxa * PV * (k*(k+1) / (2*N));
+    const principalAgora = (PV/N) * k; // amortização das k últimas
+    const multa = (PV||0) * (multaPct||0);
+    const econLiq = econBruta - multa;
+    return {
+      tipo:'sac-k-prazo',
+      pagarHoje: principalAgora + multa,
+      economiaBruta: econBruta,
+      economiaLiquida: econLiq,
+      Nnovo: N-k,
+      multa,
+      i: taxa
+    };
   }
 
   document.getElementById('btn').onclick = () => {
@@ -184,74 +291,185 @@
     const PV     = brToNumber(document.getElementById('saldo').value);
     const iMes   = brToNumber(document.getElementById('taxaMes').value)/100;
     const iAno   = brToNumber(document.getElementById('cetAno').value)/100;
-    const multaPct = brToNumber(document.getElementById('multa').value)/100 || 0;
     const modo   = document.getElementById('modo').value;
+    const k      = parseInt((document.getElementById('k').value||'0').trim(),10);
+    const estrategia = (document.getElementById('estrategia')||{}).value || 'prazo';
+    const advMultaOn = document.getElementById('advMultaOn').checked;
+    const multaPct   = advMultaOn ? (brToNumber(document.getElementById('multa').value)/100 || 0) : 0;
 
     let i = NaN;
     if(iMes>0) i = iMes;
     else if(iAno>0) i = anualParaMes(iAno);
 
     const out = document.getElementById('out');
+    const chart = document.getElementById('chart');
     out.style.display = 'block';
 
-    // validações mínimas
-    if(!(N>0)){ out.innerHTML = "<span class='err'>Informe <b>Parcelas restantes (N)</b>.</span>"; return; }
-    if(tipo==='price' && !(A>0)){ out.innerHTML = "<span class='err'>Informe o <b>valor da parcela</b>.</span>"; return; }
-    if(modo==='ultima' && tipo==='sac'){ out.innerHTML = "Antecipar só a última parcela aqui é suportado para <b>Price</b>."; return; }
+    // validações básicas
+    if(!(N>0)){ out.innerHTML = "<span class='err'>Informe <b>Parcelas restantes (N)</b>.</span>"; drawChart([],[]); return; }
+    if(tipo==='price' && !(A>0)){ out.innerHTML = "<span class='err'>Informe o <b>valor da parcela</b>.</span>"; drawChart([],[]); return; }
+    if(modo==='ultimas' && !(k>0)){ out.innerHTML = "<span class='err'>Informe <b>quantas parcelas</b> antecipar.</span>"; drawChart([],[]); return; }
 
-    // lógica
+    // Cálculo principal
     if(tipo==='price'){
-      if(modo==='ultima'){
-        const r = ultimaParcelaPrice(A,N,i);
-        if(r.erro){ out.innerHTML = r.erro; return; }
-        let pagar = r.pagarHoje;
-        let multa = 0;
-        if(PV>0 && multaPct>0){ multa = PV*multaPct; pagar += multa; }
-        const econ = r.desconto - multa;
-        out.innerHTML = `
-          <div class="kv"><div><b>Antecipar a última parcela (Price)</b></div><span class="badge">Parcela nº ${N}</span></div>
-          <div>Parcela futura: <b>${fmtBRL(A)}</b></div>
-          <div>Pagar hoje (PV da última): <b>${fmtBRL(r.pagarHoje)}</b></div>
-          ${multa?`<div>Multa sobre saldo: <b>${fmtBRL(multa)}</b></div>`:''}
-          <div class="${multa?'warn':'ok'}">Economia estimada: <b>${fmtBRL(Math.max(0,econ))}</b></div>
-          <div class="muted">Taxa usada: ${fmtPct(i)} ao mês</div>
-        `;
-        return;
-      } else {
-        const r = economiaPrice(A,N,PV,i);
-        if(r.erro){ out.innerHTML = r.erro; return; }
-        const multa = (r.usadoPV||0)*multaPct;
+      if(modo==='tudo'){
+        const r = economiaPriceTudo(A,N,PV,i);
+        if(r.erro){ out.innerHTML = r.erro; drawChart([],[]); return; }
+        const multa = (r.usadoPV||0) * multaPct;
         const econLiquida = r.economiaBruta - multa;
+        const cls = econLiquida < 0 ? 'err' : (multa ? 'warn' : 'ok');
+        const lbl = econLiquida < 0 ? 'Diferença (pior que manter):' : 'Economia líquida:';
+
         out.innerHTML = `
           <div class="kv"><div><b>Quitar tudo agora (Price)</b></div><span class="badge">${r.i>0?('Taxa: '+fmtPct(r.i)+' a.m.'):'Taxa estimada/—'}</span></div>
           <div>Somatório de parcelas futuras: <b>${fmtBRL(A*N)}</b></div>
-          <div>Quitar hoje (aprox.): <b>${fmtBRL(r.usadoPV + multa)}</b> ${multa?`<span class="muted">(inclui multa)</span>`:''}</div>
-          <div class="ok">Economia de juros (bruta): <b>${fmtBRL(Math.max(0,r.economiaBruta))}</b></div>
-          ${multa?`<div>Multa: <b>${fmtBRL(multa)}</b></div>`:''}
-          <div class="${multa?'warn':'ok'}">Economia <b>líquida</b>: <b>${fmtBRL(Math.max(0,econLiquida))}</b></div>
+          <div>Quitar hoje (aprox.): <b>${fmtBRL(r.usadoPV + (multa||0))}</b> ${multa?`<span class="muted">(inclui multa)</span>`:''}</div>
+          <div class="ok">Economia de juros (bruta): <b>${fmtBRL(r.economiaBruta)}</b></div>
+          ${multa?`<div>Multa: <b>${fmtBRL(multa)}</b> <span class="pill">opção avançada</span></div>`:''}
+          <div class="${cls}"><b>${lbl}</b> <b>${fmtBRL(econLiquida)}</b></div>
           <div class="muted">Saldo considerado: ${fmtBRL(r.usadoPV||0)}</div>
         `;
+
+        // gráfico: antes N vezes A, depois 0 (quitado)
+        drawChart(Array(N).fill(A), []);
+        return;
+      }
+
+      if(modo==='ultimas'){
+        const r = anteciparUltimasPrice(A,N,i,k,estrategia,PV,multaPct);
+        if(r.erro){ out.innerHTML = r.erro; drawChart([],[]); return; }
+        const cls = r.economiaLiquida < 0 ? 'err' : (r.multa ? 'warn' : 'ok');
+        const lbl = r.economiaLiquida < 0 ? 'Diferença (pior que manter):' : 'Economia líquida:';
+
+        out.innerHTML = `
+          <div class="kv"><div><b>Antecipar últimas ${k} parcelas (Price)</b></div><span class="badge">${estrategia==='prazo'?'Reduzir prazo':'Reduzir parcela'}</span></div>
+          <div>Você pagaria hoje: <b>${fmtBRL(r.pagarHoje)}</b> ${r.multa?`<span class="muted">(inclui multa)</span>`:''}</div>
+          <div>Economia de juros (bruta): <b>${fmtBRL(r.economiaBruta)}</b></div>
+          ${r.multa?`<div>Multa: <b>${fmtBRL(r.multa)}</b> <span class="pill">opção avançada</span></div>`:''}
+          <div class="${cls}"><b>${lbl}</b> <b>${fmtBRL(r.economiaLiquida)}</b></div>
+          <div class="muted">De ${N} → ${r.Nnovo} parcelas. ${estrategia==='parcela' ? `Parcela nova estimada: <b>${fmtBRL(r.Anovo)}</b> (antes: ${fmtBRL(r.Aantigo)})` : `Parcela permanece ${fmtBRL(r.Aantigo)}.`}</div>
+        `;
+
+        // gráfico
+        const antes = Array(N).fill(A);
+        let depois;
+        if(estrategia==='prazo'){
+          depois = Array(N - k).fill(A);
+        } else {
+          depois = Array(N).fill(r.Anovo);
+        }
+        drawChart(antes,depois);
         return;
       }
     }
 
     if(tipo==='sac'){
-      const r = economiaSAC(A,N,PV,i);
-      if(r.erro){ out.innerHTML = r.erro; return; }
-      const multa = (PV||0)*multaPct;
-      const econLiquida = r.economiaBruta - multa;
-      out.innerHTML = `
-        <div class="kv"><div><b>Quitar tudo agora (SAC)</b></div><span class="badge">Taxa usada/estimada: ${fmtPct(r.i)} a.m.</span></div>
-        <div>Juros que seriam pagos (estimativa): <b>${fmtBRL(Math.max(0,r.economiaBruta))}</b></div>
-        ${multa?`<div>Multa: <b>${fmtBRL(multa)}</b></div>`:''}
-        <div class="${multa?'warn':'ok'}">Economia <b>líquida</b>: <b>${fmtBRL(Math.max(0,econLiquida))}</b></div>
-        <div class="muted">Saldo informado: ${fmtBRL(PV||0)} • Parcelas restantes: ${N}</div>
-      `;
-      return;
+      if(modo==='tudo'){
+        const r = economiaSACTudo(A,N,PV,i);
+        if(r.erro){ out.innerHTML = r.erro; drawChart([],[]); return; }
+        const multa = (PV||0) * multaPct;
+        const econLiquida = r.economiaBruta - multa;
+        const cls = econLiquida < 0 ? 'err' : (multa ? 'warn' : 'ok');
+        const lbl = econLiquida < 0 ? 'Diferença (pior que manter):' : 'Economia líquida:';
+
+        out.innerHTML = `
+          <div class="kv"><div><b>Quitar tudo agora (SAC)</b></div><span class="badge">Taxa usada/estimada: ${fmtPct(r.i)} a.m.</span></div>
+          <div>Juros que seriam pagos (estimativa): <b>${fmtBRL(r.economiaBruta)}</b></div>
+          ${multa?`<div>Multa: <b>${fmtBRL(multa)}</b> <span class="pill">opção avançada</span></div>`:''}
+          <div class="${cls}"><b>${lbl}</b> <b>${fmtBRL(econLiquida)}</b></div>
+          <div class="muted">Saldo informado: ${fmtBRL(PV||0)} • Parcelas restantes: ${N}</div>
+        `;
+        // gráfico: antes escada decrescente; depois 0
+        drawChart(seriesSAC(PV, r.i, N), []);
+        return;
+      }
+
+      if(modo==='ultimas'){
+        const r = anteciparUltimasSAC(A,N,PV,i,k,multaPct);
+        if(r.erro){ out.innerHTML = r.erro; drawChart([],[]); return; }
+        const cls = r.economiaLiquida < 0 ? 'err' : (r.multa ? 'warn' : 'ok');
+        const lbl = r.economiaLiquida < 0 ? 'Diferença (pior que manter):' : 'Economia líquida:';
+
+        out.innerHTML = `
+          <div class="kv"><div><b>Antecipar últimas ${k} parcelas (SAC)</b></div><span class="badge">Reduzir prazo</span></div>
+          <div>Você pagaria hoje (principal das ${k} últimas): <b>${fmtBRL((PV/N)*k + (r.multa||0))}</b> ${r.multa?`<span class="muted">(inclui multa)</span>`:''}</div>
+          <div>Juros evitados (estimativa): <b>${fmtBRL(r.economiaBruta)}</b></div>
+          ${r.multa?`<div>Multa: <b>${fmtBRL(r.multa)}</b> <span class="pill">opção avançada</span></div>`:''}
+          <div class="${cls}"><b>${lbl}</b> <b>${fmtBRL(r.economiaLiquida)}</b></div>
+          <div class="muted">De ${N} → ${r.Nnovo} parcelas. Em SAC mantemos o valor das primeiras e só reduzimos o prazo.</div>
+        `;
+
+        // gráfico: antes escada decrescente; depois escada até N-k
+        const taxa = r.i;
+        const antes = seriesSAC(PV, taxa, N);
+        const depois = seriesSAC(PV - (PV/N)*k, taxa, N - k);
+        drawChart(antes,depois);
+        return;
+      }
     }
 
     out.innerHTML = "Revise os dados.";
+    drawChart([],[]);
   };
+
+  // Série de pagamentos SAC (aproximação: amortização constante PV/N e juros sobre saldo)
+  function seriesSAC(PV,i,N){
+    const arr=[];
+    let saldo=PV;
+    const amort = PV/N;
+    for(let t=1;t<=N;t++){
+      const juros = i>0 ? saldo*i : 0;
+      arr.push(amort + juros);
+      saldo -= amort;
+    }
+    return arr;
+  }
+
+  // ===== Gráfico (canvas 2 séries: antes x depois) =====
+  function drawChart(antes, depois){
+    const c = document.getElementById('chart');
+    const ctx = c.getContext('2d');
+    const W = c.width = c.clientWidth * devicePixelRatio;
+    const H = c.height = c.clientHeight * devicePixelRatio;
+    ctx.clearRect(0,0,W,H);
+
+    // legenda
+    ctx.font = (12*devicePixelRatio)+'px system-ui';
+    ctx.fillStyle = '#9ca3af';
+    ctx.fillText('Antes', 12*devicePixelRatio, 20*devicePixelRatio);
+    ctx.fillText('Depois', 80*devicePixelRatio, 20*devicePixelRatio);
+
+    // cores (não fixamos cores exatas; o navegador escolherá tons padrão)
+    const pad = 32*devicePixelRatio;
+    const maxLen = Math.max(antes.length, depois.length, 1);
+    const barW = Math.max(2, (W - pad*2) / (maxLen*1.2));
+    const maxV = Math.max(1, Math.max(...antes,0, ...depois,0));
+
+    // eixos
+    ctx.strokeStyle = '#1f2937';
+    ctx.beginPath();
+    ctx.moveTo(pad, H-pad);
+    ctx.lineTo(W-pad, H-pad);
+    ctx.moveTo(pad, pad);
+    ctx.lineTo(pad, H-pad);
+    ctx.stroke();
+
+    // desenhar barras
+    for(let i=0;i<maxLen;i++){
+      const x = pad + i*(barW*1.2);
+      const v1 = i<antes.length ? antes[i] : 0;
+      const v2 = i<depois.length ? depois[i] : 0;
+      const h1 = (v1/maxV)*(H - pad*2);
+      const h2 = (v2/maxV)*(H - pad*2);
+
+      // antes
+      ctx.fillStyle = '#64748b';
+      ctx.fillRect(x, (H-pad)-h1, barW, h1);
+      // depois (ao lado)
+      ctx.fillStyle = '#e5e7eb';
+      ctx.fillRect(x+barW*0.2, (H-pad)-h2, barW, h2);
+    }
+  }
 </script>
 </body>
 </html>
