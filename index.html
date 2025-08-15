@@ -196,7 +196,7 @@
     document.getElementById('advToggle').textContent = opened ? 'Mostrar opções' : 'Ocultar opções';
   };
 
-  // Quando troca para "últimas", só mostra o campo K. Os painéis de comparação ficam escondidos até calcular.
+  // Ao mudar para “últimas”, só mostramos o campo K. Os painéis ficam ocultos até calcular.
   document.getElementById('modo').onchange = () => {
     const modo = document.getElementById('modo').value;
     document.getElementById('kBox').style.display = (modo==='ultimas') ? 'block' : 'none';
@@ -239,7 +239,7 @@
     const econParcLiq   = econParcBruta - multa;
 
     return {
-      prazo: { pagarHoje: pvSum + multa, economiaBruta: econPrazoBruta, economiaLiquida: econPrazoLiq, Nnovo, multa },
+      prazo:   { pagarHoje: pvSum + multa, economiaBruta: econPrazoBruta, economiaLiquida: econPrazoLiq, Nnovo, multa },
       parcela: { pagarHoje: pvSum + multa, economiaBruta: econParcBruta, economiaLiquida: econParcLiq, Aantigo: A, Anovo: Anew, multa }
     };
   }
@@ -320,7 +320,6 @@
           ${multa?`<div>Multa: <b>${fmtBRL(multa)}</b> <span class="pill">opção avançada</span></div>`:''}
           <div class="${cls}"><b>${lbl}</b> <b>${fmtBRL(econLiquida)}</b></div>
         `;
-        // gráfico geral: barras totais
         drawBarTotalsAsync('chart', A*N, 0);
         return;
       }
@@ -356,12 +355,10 @@
           <div class="${clsB}"><b>${lblB}</b> <b>${fmtBRL(r.parcela.economiaLiquida)}</b></div>
         `;
 
-        // mostra os painéis só agora
+        // mostra os painéis e desenha
         compare.style.display = 'grid';
-
-        // gráficos após layout (para garantir dimensões corretas)
-        drawBarCustomAsync('chartPrazo', N, r.prazo.Nnovo, 'Meses antes', 'Meses depois');
-        drawBarCustomAsync('chartParcela', r.parcela.Aantigo, r.parcela.Anovo, 'Parcela antes', 'Parcela depois');
+        drawBarCustomAsync('chartPrazo',   N, r.prazo.Nnovo, 'Meses antes',   'Meses depois', 'months');
+        drawBarCustomAsync('chartParcela', r.parcela.Aantigo, r.parcela.Anovo, 'Parcela antes','Parcela depois', 'money');
         return;
       }
     }
@@ -419,7 +416,7 @@
     return arr;
   }
 
-  // ===== Canvas utils =====
+  // ===== Canvas utils e gráficos =====
   function clearCanvas(id){
     const c = document.getElementById(id); if(!c) return;
     const ctx = c.getContext('2d');
@@ -438,9 +435,7 @@
   }
 
   // Barras totais (antes/depois)
-  function drawBarTotalsAsync(id, before, after){
-    requestAnimationFrame(()=>drawBarTotals(id,before,after));
-  }
+  function drawBarTotalsAsync(id, before, after){ requestAnimationFrame(()=>drawBarTotals(id,before,after)); }
   function drawBarTotals(id, before, after){
     const {ctx,W,H} = withCtx(id);
     const pad = 40*devicePixelRatio, maxV = Math.max(1,before,after);
@@ -459,11 +454,16 @@
     ctx.fillStyle='#9ca3af'; ctx.font=(12*devicePixelRatio)+'px system-ui'; ctx.textAlign='center';
     ctx.fillText('Antes', x1+barW/2, pad-8*devicePixelRatio);
     ctx.fillText('Depois',x2+barW/2, pad-8*devicePixelRatio);
+
+    // valores em cima das barras (formato curto)
+    ctx.fillStyle='#e5e7eb';
+    ctx.fillText(before.toLocaleString('pt-BR'), x1+barW/2, (H-pad)-h1-6*devicePixelRatio);
+    ctx.fillText(after.toLocaleString('pt-BR'),  x2+barW/2, (H-pad)-h2-6*devicePixelRatio);
   }
 
-  // Barras customizadas (meses / parcela)
-  function drawBarCustomAsync(id,before,after,l1,l2){ requestAnimationFrame(()=>drawBarCustom(id,before,after,l1,l2)); }
-  function drawBarCustom(id,before,after,l1,l2){
+  // Barras personalizadas com rótulo de valor em cima (months|money)
+  function drawBarCustomAsync(id,before,after,l1,l2,type){ requestAnimationFrame(()=>drawBarCustom(id,before,after,l1,l2,type)); }
+  function drawBarCustom(id,before,after,l1,l2,type){
     const {ctx,W,H} = withCtx(id);
     const pad = 40*devicePixelRatio, maxV=Math.max(1,before,after);
     ctx.clearRect(0,0,W,H);
@@ -474,13 +474,23 @@
     const barW=(W-pad*2)/6, h1=(before/maxV)*(H-pad*2), h2=(after/maxV)*(H-pad*2);
     const x1=pad+barW, x2=W/2+barW;
 
+    // Antes
     ctx.fillStyle='#64748b'; ctx.fillRect(x1,(H-pad)-h1,barW,h1);
+    // Depois
     ctx.fillStyle= after<before ? '#16a34a' : (after>before ? '#ef4444' : '#94a3b8');
     ctx.fillRect(x2,(H-pad)-h2,barW,h2);
 
+    // títulos das categorias
     ctx.fillStyle='#9ca3af'; ctx.font=(12*devicePixelRatio)+'px system-ui'; ctx.textAlign='center';
     ctx.fillText(l1, x1+barW/2, pad-8*devicePixelRatio);
     ctx.fillText(l2, x2+barW/2, pad-8*devicePixelRatio);
+
+    // valores em cima das barras
+    ctx.fillStyle='#e5e7eb'; ctx.font=(12*devicePixelRatio)+'px system-ui';
+    const v1 = (type==='money') ? fmtBRL(before) : String(before);
+    const v2 = (type==='money') ? fmtBRL(after)  : String(after);
+    ctx.fillText(v1, x1+barW/2, (H-pad)-h1-6*devicePixelRatio);
+    ctx.fillText(v2, x2+barW/2, (H-pad)-h2-6*devicePixelRatio);
   }
 
   // Linhas (SAC)
