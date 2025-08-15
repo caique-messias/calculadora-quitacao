@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Calculadora de Quitação / Antecipação de Parcelas</title>
+<style>
+  :root{--bg:#0f172a;--card:#111827;--txt:#e5e7eb;--muted:#9ca3af;--ok:#22c55e;--warn:#f59e0b;}
+  body{margin:0;background:var(--bg);color:var(--txt);font:16px/1.5 system-ui,Segoe UI,Roboto,Arial}
+  .wrap{max-width:860px;margin:32px auto;padding:0 16px}
+  .card{background:var(--card);border-radius:18px;padding:18px 16px;box-shadow:0 8px 30px rgba(0,0,0,.35)}
+  h1{margin:0 0 10px;font-size:22px}
+  fieldset{border:0;margin:0;padding:0}
+  label{display:block;margin:10px 0 6px;color:var(--muted)}
+  input,select,button{width:100%;padding:10px 12px;border-radius:10px;border:1px solid #1f2937;background:#0b1220;color:var(--txt)}
+  .row{display:grid;gap:12px}
+  @media(min-width:720px){.row{grid-template-columns:1fr 1fr}}
+  .hint{font-size:12px;color:var(--muted)}
+  .result{margin-top:16px;padding:14px;border-radius:12px;background:#0b1220}
+  .ok{color:var(--ok)} .warn{color:var(--warn)}
+  .muted{color:var(--muted)}
+  .foot{margin-top:18px;font-size:12px;color:var(--muted)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="card">
+    <h1>Calculadora de Quitação / Antecipação</h1>
+    <p class="muted">Descubra quanto de <b>juros</b> você economiza ao quitar agora. Funciona para <b>Price</b> (parcelas iguais) e <b>SAC</b> (parcelas decrescentes).</p>
+
+    <fieldset class="row" style="margin-top:8px">
+      <div>
+        <label for="tipo">Tipo do financiamento</label>
+        <select id="tipo">
+          <option value="price" selected>Price (parcelas iguais)</option>
+          <option value="sac">SAC (parcelas que caem)</option>
+        </select>
+        <div class="hint">Se suas parcelas são iguais, é Price. Se caem mês a mês, é SAC.</div>
+      </div>
+      <div>
+        <label for="parcela">Valor da parcela atual (R$)</label>
+        <input id="parcela" inputmode="decimal" placeholder="Ex.: 1.200,00" />
+      </div>
+    </fieldset>
+
+    <fieldset class="row">
+      <div>
+        <label for="n">Parcelas restantes (N)</label>
+        <input id="n" inputmode="numeric" placeholder="Ex.: 24" />
+      </div>
+      <div>
+        <label for="saldo">Saldo devedor (opcional) — se souber</label>
+        <input id="saldo" inputmode="decimal" placeholder="Ex.: 22.500,00" />
+        <div class="hint">Se informar o saldo, calculamos mesmo sem a taxa.</div>
+      </div>
+    </fieldset>
+
+    <fieldset class="row">
+      <div>
+        <label for="taxaMes">Taxa ao mês % (opcional)</label>
+        <input id="taxaMes" inputmode="decimal" placeholder="Ex.: 1,49" />
+      </div>
+      <div>
+        <label for="cetAno">ou CET ao ano % (opcional)</label>
+        <input id="cetAno" inputmode="decimal" placeholder="Ex.: 22,5" />
+      </div>
+    </fieldset>
+
+    <fieldset class="row">
+      <div>
+        <label for="multa">Multa de quitação % (opcional)</label>
+        <input id="multa" inputmode="decimal" placeholder="Ex.: 2" />
+        <div class="hint">Alguns contratos cobram até 2% sobre o saldo.</div>
+      </div>
+      <div>
+        <label for="modo">O que antecipar?</label>
+        <select id="modo">
+          <option value="tudo" selected>Quitar tudo agora</option>
+          <option value="ultima">Antecipar só a última parcela</option>
+        </select>
+      </div>
+    </fieldset>
+
+    <div style="margin-top:10px">
+      <button id="btn">Calcular</button>
+    </div>
+
+    <div id="out" class="result" style="display:none"></div>
+
+    <div class="foot">
+      ⚠️ <b>Aviso:</b> Resultado educativo/estimado. Regras específicas do seu contrato podem alterar valores. Confirme com sua instituição antes de decidir.
+    </div>
+  </div>
+</div>
+
+<script>
+  const fmt = v => v.toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
+  const num = s => {
+    if(!s) return NaN;
+    // aceita vírgula como decimal
+    return Number(String(s).replace(/\./g,'').replace(',','.').replace(/[^\d.-]/g,''));
+  };
+
+  // conversões
+  const anualParaMes = a => Math.pow(1+a,1/12)-1;
+
+  // PV de anuidade (Price)
+  const pvPrice = (A,i,N) => A*(1 - Math.pow(1+i,-N))/i;
+
+  // Economia em Price ao quitar tudo agora:
+  // Se tiver saldo PV: economia = A*N - PV
+  // Se não tiver PV mas tiver taxa: PV = pvPrice(A,i,N) ⇒ mesma fórmula acima
+  function economiaPrice(A,N,PV,i){
+    let usadoPV = PV;
+    if(!(usadoPV>0)){
+      if(!(i>0)) return {erro:"Informe <b>Saldo</b> ou <b>Taxa</b> para Price."};
+      usadoPV = pvPrice(A,i,N);
+    }
+    const economiaBruta = (A*N) - usadoPV;
+    return {economiaBruta, usadoPV, i};
+  }
+
+  // Última parcela (Price): desconto = A - A/(1+i)^N
+  function ultimaParcelaPrice(A,N,i){
+    if(!(i>0)) return {erro:"Para antecipar só a última parcela, informe a <b>Taxa</b> (ou CET)."};
+    const hoje = A/Math.pow(1+i,N);
+    return {desconto: A - hoje, pagarHoje: hoje};
+  }
+
+  // Economia em SAC: juros poupados = i * PV * (N+1)/2
+  // Se taxa não informada, podemos estimar via parcela atual:
+  // parcelaAtual = PV/N + i*PV  ⇒ i = parcela/PV - 1/N
+  function economiaSAC(parcela, N, PV, i){
+    let taxa = i;
+    if(!(PV>0)) return {erro:"Para SAC, informe o <b>Saldo</b>."};
+    if(!(taxa>0)){
+      if(!(parcela>0)) return {erro:"Para SAC, informe <b>Taxa</b> ou o <b>valor da parcela atual</b>."};
+      taxa = (parcela/PV) - (1/N);
+      if(!(taxa>0)) return {erro:"Dados insuficientes: revise parcela/saldo/N."};
+    }
+    const economiaBruta = taxa * PV * (N+1) / 2;
+    return {economiaBruta, i:taxa};
+  }
+
+  document.getElementById('btn').onclick = () => {
+    const tipo = document.getElementById('tipo').value;
+    const A    = num(document.getElementById('parcela').value);
+    const N    = parseInt(document.getElementById('n').value || '0',10);
+    const PV   = num(document.getElementById('saldo').value);
+    const iMes = num(document.getElementById('taxaMes').value)/100;
+    const iAno = num(document.getElementById('cetAno').value)/100;
+    const multaPct = num(document.getElementById('multa').value)/100 || 0;
+    const modo = document.getElementById('modo').value;
+
+    // taxa efetiva ao mês
+    let i = NaN;
+    if(iMes>0) i = iMes;
+    else if(iAno>0) i = anualParaMes(iAno);
+
+    const out = document.getElementById('out');
+    out.style.display = 'block';
+
+    // Validações simples
+    if(!(N>0)){ out.innerHTML = "Informe <b>Parcelas restantes (N)</b>."; return; }
+
+    if(modo === 'ultima' && tipo === 'sac'){
+      out.innerHTML = "Antecipar só a última parcela é suportado aqui apenas para <b>Price</b> (parcelas iguais).";
+      return;
+    }
+
+    // Lógica
+    if(tipo === 'price'){
+      if(modo === 'ultima'){
+        if(!(A>0)){ out.innerHTML = "Informe o <b>valor da parcela</b>."; return; }
+        const r = ultimaParcelaPrice(A,N,i);
+        if(r.erro){ out.innerHTML = r.erro; return; }
+        let pagar = r.pagarHoje;
+        if(PV>0 && multaPct>0){ // multa costuma incidir sobre o saldo, mas como é última parcela, tratamos como 0 (ou sobre PV se informado)
+          pagar += PV * multaPct;
+        }
+        const econ = r.desconto - (PV>0 ? PV*multaPct : 0);
+        out.innerHTML = `
+          <div><b>Antecipar a última parcela (Price)</b></div>
+          <div>Valor da parcela (futuro): ${fmt(A)}</div>
+          <div>Se pagar hoje, pagaria: ${fmt(pagar)} ${multaPct?`<span class="muted">(inclui multa)</span>`:''}</div>
+          <div class="ok">Economia estimada: <b>${fmt(Math.max(0,econ))}</b></div>
+          <div class="muted">Taxa usada: ${(i*100).toFixed(3)}% ao mês • Parcela nº ${N}</div>
+        `;
+        return;
+      } else {
+        if(!(A>0)){ out.innerHTML = "Informe o <b>valor da parcela</b>."; return; }
+        const r = economiaPrice(A,N,PV,i);
+        if(r.erro){ out.innerHTML = r.erro; return; }
+        const multa = (r.usadoPV||0) * multaPct;
+        const econLiquida = r.economiaBruta - multa;
+        out.innerHTML = `
+          <div><b>Quitar tudo agora (Price)</b></div>
+          <div>Somando parcelas futuras: ${fmt(A*N)}</div>
+          <div>Quitar hoje (aprox.): ${fmt(r.usadoPV + multa)} ${multaPct?`<span class="muted">(inclui multa)</span>`:''}</div>
+          <div class="ok">Economia de juros (bruta): <b>${fmt(Math.max(0,r.economiaBruta))}</b></div>
+          ${multaPct?`<div>Multa: ${fmt(multa)}</div>`:''}
+          <div class="${multaPct?'warn':'ok'}">Economia <b>líquida</b>: <b>${fmt(Math.max(0,econLiquida))}</b></div>
+          <div class="muted">Taxa usada: ${r.i>0? (r.i*100).toFixed(3)+'% a.m.' : '—'} • Saldo considerado: ${fmt(r.usadoPV||0)}</div>
+        `;
+        return;
+      }
+    }
+
+    if(tipo === 'sac'){
+      const r = economiaSAC(A,N,PV,i);
+      if(r.erro){ out.innerHTML = r.erro; return; }
+      const multa = (PV||0) * multaPct;
+      const econLiquida = r.economiaBruta - multa;
+      out.innerHTML = `
+        <div><b>Quitar tudo agora (SAC)</b></div>
+        <div>Juros que seriam pagos (estimativa): ${fmt(Math.max(0,r.economiaBruta))}</div>
+        ${multaPct?`<div>Multa: ${fmt(multa)}</div>`:''}
+        <div class="${multaPct?'warn':'ok'}">Economia <b>líquida</b>: <b>${fmt(Math.max(0,econLiquida))}</b></div>
+        <div class="muted">Taxa usada/estimada: ${(r.i*100).toFixed(3)}% a.m. • Saldo informado: ${fmt(PV||0)}</div>
+      `;
+      return;
+    }
+
+    out.innerHTML = "Revise os dados.";
+  };
+</script>
+</body>
+</html>
